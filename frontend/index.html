@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnapKey Remote Access Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <span class="logo-icon">🔑</span>
+        <span class="logo-text">SnapKey</span>
+      </div>
+      <div class="sidebar-search-container">
+        <input type="text" id="search-box" class="search-box" placeholder="Search saved users...">
+      </div>
+      
+      <div class="saved-users-section">
+        <h3>Saved Devices</h3>
+        <div id="users-list" class="users-list">
+          <!-- Dynamic List of Saved Users -->
+          <div class="user-item placeholder">No saved devices found</div>
+        </div>
+      </div>
+
+      <div class="active-agents-section">
+        <h3>Active Agents</h3>
+        <div id="agents-list" class="agents-list">
+          <!-- Dynamic List of Online Agents -->
+          <div class="agent-item placeholder">None online</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Panel -->
+    <main class="panel">
+      <h1>SnapKey Remote Access</h1>
+
+      <form id="connect-form" onsubmit="return false;">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="user_name">User Name</label>
+            <input type="text" id="user_name" placeholder="e.g. John Doe" required autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label for="user_id">User ID (AnyDesk ID)</label>
+            <input type="text" id="user_id" placeholder="Numeric digits only (e.g. 123456789)" required autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label for="agent_token">Agent Token</label>
+            <input type="text" id="agent_token" placeholder="Support PC token (e.g. dev-agent-token)" required autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password (Optional)</label>
+            <input type="password" id="password" placeholder="Unattended access password" autocomplete="new-password">
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" id="save-btn" class="btn btn-secondary">Save Device</button>
+          <button type="button" id="connect-btn" class="btn btn-primary">Connect</button>
+        </div>
+      </form>
+
+      <div id="status-card" class="status-box">
+        <h3>Connection Status</h3>
+        <p id="status-text">Ready. Enter credentials or select a saved device.</p>
+      </div>
+
+      <footer>
+        <div class="footer-info">
+          <span>SnapKey Remote Access Dashboard &copy; 2026</span>
+          <span class="security-note">⚠️ Target PC must explicitly accept or have unattended setup configured.</span>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

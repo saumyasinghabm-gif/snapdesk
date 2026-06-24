@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+psutil
+pydantic
+sqlalchemy
+psycopg2-binary
+cryptography
+websockets

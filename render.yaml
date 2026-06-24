@@ -1,0 +1,33 @@
+databases:
+  - name: snapkey-db
+    plan: free
+    databaseName: snapkey
+    user: snapkey
+
+services:
+  - type: web
+    name: snapkey-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: snapkey-db
+          property: connectionString
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: AGENT_TOKENS
+        sync: false
+
+  - type: web
+    name: snapkey-frontend
+    runtime: static
+    plan: free
+    rootDir: frontend
+    buildCommand: ""
+    staticPublishPath: "."
