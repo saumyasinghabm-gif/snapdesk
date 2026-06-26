@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>URL Construction Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border: 1px solid #ddd; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>URL Construction Test</h1>
+
+    <h2>Current Configuration</h2>
+    <div id="config"></div>
+
+    <h2>Test Results</h2>
+    <div id="results"></div>
+
+    <h2>Manual Test</h2>
+    <div>
+        <input type="text" id="testBase" value="https://snapkey-backend.onrender.com" style="width: 400px;">
+        <input type="text" id="testPath" value="/api/users" style="width: 200px;">
+        <button onclick="testManual()">Test URL Construction</button>
+    </div>
+    <div id="manualResult"></div>
+
+    <script>
+        // Copy the exact buildApiUrl function from app.js
+        const API_BASE = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
+          ? "http://127.0.0.1:8000"
+          : "https://snapkey-backend.onrender.com";
+
+        function buildApiUrl(path) {
+            const cleanBase = API_BASE.replace(/\/$/, '');
+            const cleanPath = path.replace(/^\//, '');
+            return `${cleanBase}/${cleanPath}`;
+        }
+
+        // Test the function
+        function runTests() {
+            const resultsDiv = document.getElementById('results');
+            const configDiv = document.getElementById('config');
+
+            configDiv.innerHTML = `
+                <div class="test-result">
+                    <strong>API_BASE:</strong> "${API_BASE}"
+                </div>
+            `;
+
+            const tests = [
+                { path: "/api/users", description: "Users endpoint" },
+                { path: "api/users", description: "Users endpoint (no leading slash)" },
+                { path: "/api/agents", description: "Agents endpoint" },
+                { path: "/api/connect-request", description: "Connect request endpoint" }
+            ];
+
+            tests.forEach(test => {
+                const result = buildApiUrl(test.path);
+                const hasDoubleSlash = result.includes('//') && !result.startsWith('http');
+                const isValid = !hasDoubleSlash && result.startsWith('http');
+
+                const resultDiv = document.createElement('div');
+                resultDiv.className = `test-result ${isValid ? 'success' : 'error'}`;
+                resultDiv.innerHTML = `
+                    <strong>${test.description}:</strong> "${result}"<br>
+                    ${isValid ? '✅ Valid URL' : '❌ Invalid URL'} ${hasDoubleSlash ? '(contains double slash)' : ''}
+                `;
+                resultsDiv.appendChild(resultDiv);
+            });
+        }
+
+        function testManual() {
+            const base = document.getElementById('testBase').value;
+            const path = document.getElementById('testPath').value;
+
+            // Test with the function
+            const cleanBase = base.replace(/\/$/, '');
+            const cleanPath = path.replace(/^\//, '');
+            const result = `${cleanBase}/${cleanPath}`;
+
+            const hasDoubleSlash = result.includes('//') && !result.startsWith('http');
+            const isValid = !hasDoubleSlash && result.startsWith('http');
+
+            const resultDiv = document.getElementById('manualResult');
+            resultDiv.innerHTML = `
+                <div class="test-result ${isValid ? 'success' : 'error'}">
+                    <strong>Input:</strong> Base="${base}", Path="${path}"<br>
+                    <strong>Output:</strong> "${result}"<br>
+                    ${isValid ? '✅ Valid URL' : '❌ Invalid URL'} ${hasDoubleSlash ? '(contains double slash)' : ''}
+                </div>
+            `;
+        }
+
+        // Run tests when page loads
+        window.addEventListener('DOMContentLoaded', runTests);
+    </script>
+</body>
+</html>

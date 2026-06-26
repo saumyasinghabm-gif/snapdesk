@@ -23,9 +23,9 @@ import subprocess
 import psutil
 import websockets
 
-# Retrieve environment configuration or use default safe fallbacks
-BACKEND_WS_URL = os.getenv("BACKEND_WS_URL", "ws://127.0.0.1:8000/ws/agent")
-# AGENT_TOKEN removed - no longer needed
+# Fixed backend URL - no configuration needed
+BACKEND_WS_URL = "wss://snapdesk-backend.onrender.com/ws/agent"
+# No token required
 
 # Well-known Windows installations paths for AnyDesk
 COMMON_PATHS = [

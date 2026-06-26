@@ -52,12 +52,10 @@ except Exception:
     print("WARNING: Invalid ENCRYPTION_KEY format. Generating a temporary random key.")
     fernet = Fernet(Fernet.generate_key())
 
-
 def encrypt_password(password: str) -> str:
     if not password:
         return None
     return fernet.encrypt(password.encode()).decode()
-
 
 def decrypt_password(encrypted: str) -> str | None:
     if not encrypted:
@@ -67,7 +65,6 @@ def decrypt_password(encrypted: str) -> str | None:
     except Exception as e:
         print(f"Error decrypting password: {e}")
         return None
-
 
 # ---------------------------------------------------------------------------
 # Database setup
@@ -84,10 +81,8 @@ connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite")
 engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-
 class Base(DeclarativeBase):
     pass
-
 
 class User(Base):
     __tablename__ = "users"
@@ -98,10 +93,8 @@ class User(Base):
     encrypted_password = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-
 # Create tables if SQLite, or assume they are managed
 Base.metadata.create_all(bind=engine)
-
 
 def get_db_session():
     db = SessionLocal()
@@ -109,7 +102,6 @@ def get_db_session():
         yield db
     finally:
         db.close()
-
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -128,7 +120,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
@@ -144,10 +135,8 @@ class ConnectRequest(BaseModel):
             raise ValueError("User ID must contain only numbers (AnyDesk ID)")
         return cleaned
 
-
 class ConnectRequestPayload(BaseModel):
-    agent_token: str
-    user_id: str
+    user_id: str  # Removed agent_token field
 
     @field_validator("user_id")
     @classmethod
@@ -157,12 +146,10 @@ class ConnectRequestPayload(BaseModel):
             raise ValueError("User ID must contain only numbers (AnyDesk ID)")
         return cleaned
 
-
 class ConnectResponse(BaseModel):
     status: str
     message: str
     anydesk_path: str | None = None
-
 
 class UserCreate(BaseModel):
     user_name: str
@@ -177,7 +164,6 @@ class UserCreate(BaseModel):
             raise ValueError("User ID must contain only numbers (AnyDesk ID)")
         return cleaned
 
-
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -185,7 +171,6 @@ class UserOut(BaseModel):
     user_name: str
     user_id: str
     created_at: datetime
-
 
 # ---------------------------------------------------------------------------
 # AnyDesk discovery helpers (Windows machine only - skipped gracefully
@@ -197,7 +182,6 @@ COMMON_PATHS = [
     r"C:\Users\Public\AnyDesk\AnyDesk.exe",
     r"C:\ProgramData\AnyDesk\AnyDesk.exe",
 ]
-
 
 def find_anydesk_from_processes() -> str | None:
     try:
@@ -212,7 +196,6 @@ def find_anydesk_from_processes() -> str | None:
         pass
     return None
 
-
 def find_anydesk_in_common_paths() -> str | None:
     username = os.getenv("USERNAME", "")
     paths = list(COMMON_PATHS)
@@ -225,7 +208,6 @@ def find_anydesk_in_common_paths() -> str | None:
         if os.path.exists(p):
             return p
     return None
-
 
 def find_anydesk_in_path() -> str | None:
     try:
@@ -240,14 +222,12 @@ def find_anydesk_in_path() -> str | None:
         pass
     return None
 
-
 def find_anydesk_path() -> str | None:
     return (
         find_anydesk_from_processes()
         or find_anydesk_in_common_paths()
         or find_anydesk_in_path()
     )
-
 
 def is_anydesk_running() -> bool:
     try:
@@ -258,56 +238,43 @@ def is_anydesk_running() -> bool:
         pass
     return False
 
-
 # ---------------------------------------------------------------------------
-# WebSocket Agent Connection Management
+# WebSocket Agent Connection Management (Token verification removed)
 # ---------------------------------------------------------------------------
 connected_agents: Dict[str, WebSocket] = {}
 
-
-def get_valid_agent_tokens() -> list[str]:
-    tokens_str = os.getenv("AGENT_TOKENS", "dev-agent-token")
-    return [t.strip() for t in tokens_str.split(",") if t.strip()]
-
-
 @app.websocket("/ws/agent")
-async def websocket_agent(websocket: WebSocket, token: str = None):
-    valid_tokens = get_valid_agent_tokens()
-    if not token or token not in valid_tokens:
-        await websocket.close(code=4003)
-        return
+async def websocket_agent(websocket: WebSocket):
+    # Generate a simple connection ID for tracking
+    connection_id = f"agent-{len(connected_agents) + 1}"
 
     await websocket.accept()
-    connected_agents[token] = websocket
-    print(f"Agent connected with token: {token}")
+    connected_agents[connection_id] = websocket
+    print(f"Agent connected: {connection_id}")
     try:
         while True:
             # Keep connection alive; discard any message from the agent
             await websocket.receive_text()
     except WebSocketDisconnect:
-        print(f"Agent disconnected: {token}")
+        print(f"Agent disconnected: {connection_id}")
     finally:
-        connected_agents.pop(token, None)
-
+        connected_agents.pop(connection_id, None)
 
 # ---------------------------------------------------------------------------
-# API Routes
+# API Routes (Modified to not require agent tokens)
 # ---------------------------------------------------------------------------
 @app.get("/")
 def read_root():
     return {"message": "Welcome to SnapKey Remote Access API. Please visit /docs for interactive documentation."}
 
-
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
-
 
 @app.get("/api/agents")
 def list_agents():
     """Lists currently connected support agents."""
     return {"connected_agents": list(connected_agents.keys())}
-
 
 @app.post("/api/connect-request")
 async def connect_request(payload: ConnectRequestPayload):
@@ -315,14 +282,18 @@ async def connect_request(payload: ConnectRequestPayload):
     Looks up the saved user's encrypted password, decrypts it, and
     sends a JSON connection command over the selected agent's WebSocket.
     """
-    agent_token = payload.agent_token
     user_id = payload.user_id
 
-    if agent_token not in connected_agents:
+    # Use the first connected agent (since we don't have tokens anymore)
+    if not connected_agents:
         raise HTTPException(
             status_code=503,
-            detail=f"Agent with token '{agent_token}' is not currently connected."
+            detail="No agents are currently connected."
         )
+
+    # Get the first available agent
+    agent_connection_id = next(iter(connected_agents))
+    ws = connected_agents[agent_connection_id]
 
     db: Session = next(get_db_session())
     db_user = db.query(User).filter(User.user_id == user_id).first()
@@ -334,7 +305,6 @@ async def connect_request(payload: ConnectRequestPayload):
 
     password = decrypt_password(db_user.encrypted_password)
 
-    ws = connected_agents[agent_token]
     command = {
         "action": "connect",
         "anydesk_id": user_id,
@@ -344,17 +314,16 @@ async def connect_request(payload: ConnectRequestPayload):
     try:
         await ws.send_json(command)
     except Exception as e:
-        connected_agents.pop(agent_token, None)
+        connected_agents.pop(agent_connection_id, None)
         raise HTTPException(
             status_code=503,
-            detail=f"Failed to transmit connection command to agent '{agent_token}': {e}"
+            detail=f"Failed to transmit connection command to agent: {e}"
         )
 
     return {
         "status": "initiated",
-        "message": f"Connection request sent to agent '{agent_token}' for AnyDesk ID '{user_id}'."
+        "message": f"Connection request sent to agent for AnyDesk ID '{user_id}'."
     }
-
 
 @app.post("/api/connect", response_model=ConnectResponse)
 def connect_legacy(req: ConnectRequest):
@@ -392,7 +361,6 @@ def connect_legacy(req: ConnectRequest):
         anydesk_path=anydesk_path,
     )
 
-
 # ---------------------------------------------------------------------------
 # User CRUD (saved devices/users) - works on Render via Postgres
 # ---------------------------------------------------------------------------
@@ -429,13 +397,11 @@ def create_user(user: UserCreate):
     db.refresh(db_user)
     return db_user
 
-
 @app.get("/api/users", response_model=list[UserOut])
 def get_all_users():
     """Lists all saved remote users."""
     db: Session = next(get_db_session())
     return db.query(User).order_by(User.id.desc()).all()
-
 
 @app.get("/api/users/{user_id}", response_model=UserOut)
 def get_single_user(user_id: str):
@@ -447,7 +413,6 @@ def get_single_user(user_id: str):
         raise HTTPException(status_code=404, detail=f"No user found with ID '{user_id}'.")
 
     return db_user
-
 
 if __name__ == "__main__":
     import uvicorn

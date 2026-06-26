@@ -2,12 +2,23 @@
  * SnapKey Remote Access Dashboard JS
  * 
  * In local dev, this points to http://127.0.0.1:8000.
- * After deploying your backend to Render, replace the fallback URL below
- * with your production Render backend URL.
+ * In production, this points at the Render backend defined in render.yaml.
  */
 const API_BASE = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
   ? "http://127.0.0.1:8000"
-  : "https://snapkey-backend.onrender.com"; // <-- Replace with your Render URL (e.g., https://snapkey-backend.onrender.com)
+  : "https://snapkey-backend.onrender.com";
+
+// Fix double slash issue by ensuring proper URL construction
+function buildApiUrl(path) {
+  // Remove any trailing slashes from base and leading slashes from path
+  const cleanBase = API_BASE.replace(/\/$/, '');
+  const cleanPath = path.replace(/^\//, '');
+  const result = `${cleanBase}/${cleanPath}`;
+
+  // Additional safety check for Vercel/Render deployment issues
+  // If we still have double slashes (e.g., from deployment base path), clean them up
+  return result.replace(/([^:]\/)\/+/g, '$1');
+}
 
 // Cache elements
 const userNameInput = document.getElementById("user_name");
@@ -46,13 +57,19 @@ function setStatus(message, type) {
  */
 async function loadSavedUsers() {
   try {
-    const res = await fetch(`${API_BASE}/api/users`);
+    const res = await fetch(buildApiUrl("/api/users"));
     if (!res.ok) throw new Error("Backend response error");
     savedUsers = await res.json();
     renderUsersList(savedUsers);
   } catch (err) {
     console.error("Failed to load saved users:", err);
-    usersListContainer.innerHTML = '<div class="user-item placeholder">Failed to load saved devices</div>';
+    // Only show error if we haven't successfully loaded users before
+    // This prevents flickering between error states and successful loads
+    if (!savedUsers || savedUsers.length === 0) {
+      usersListContainer.innerHTML = '<div class="user-item placeholder">Failed to load saved devices</div>';
+    }
+    // If we had users before, keep showing them rather than showing error
+    // This provides better user experience during temporary network issues
   }
 }
 
@@ -61,14 +78,20 @@ async function loadSavedUsers() {
  */
 async function loadActiveAgents() {
   try {
-    const res = await fetch(`${API_BASE}/api/agents`);
+    const res = await fetch(buildApiUrl("/api/agents"));
     if (!res.ok) throw new Error("Backend response error");
     const data = await res.json();
     const agents = data.connected_agents || [];
     renderAgentsList(agents);
   } catch (err) {
     console.error("Failed to load connected agents:", err);
-    agentsListContainer.innerHTML = '<div class="agent-item placeholder">Failed to check agents</div>';
+    // Only show error if we haven't successfully loaded agents before
+    // This prevents flickering between error states and successful loads
+    if (!agentsListContainer.querySelector('.agent-item:not(.placeholder)')) {
+      agentsListContainer.innerHTML = '<div class="agent-item placeholder">Failed to check agents</div>';
+    }
+    // If we had agents before, keep showing them rather than showing error
+    // This provides better user experience during temporary network issues
   }
 }
 
@@ -181,7 +204,7 @@ saveBtn.addEventListener("click", async () => {
   setStatus("Saving device details...", "pending");
 
   try {
-    const res = await fetch(`${API_BASE}/api/users`, {
+    const res = await fetch(buildApiUrl("/api/users"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -233,7 +256,7 @@ connectBtn.addEventListener("click", async () => {
   setStatus(`Sending dispatch request to agent "${agentToken}"...`, "pending");
 
   try {
-    const res = await fetch(`${API_BASE}/api/connect-request`, {
+    const res = await fetch(buildApiUrl("/api/connect-request"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

@@ -17,22 +17,28 @@ Just follow these simple steps:
    - No installation needed! Just double-click to run.
 
 3. **CONFIGURATION**
-   Open `SnapKey-Agent-Starter.bat` in Notepad and edit these lines:
-
-   set BACKEND_WS_URL=ws://your-backend-url.com/ws/agent
-   set AGENT_TOKEN=your-unique-team-token
-
-   (Your team leader will provide the correct values)
+   ✅ NO CONFIGURATION NEEDED!
+   The agent is pre-configured to connect to:
+   wss://snapdesk-backend.onrender.com/ws/agent
+   No token required - just install and go!
 
 4. **RUNNING THE AGENT**
    - Double-click `SnapKey-Agent-Starter.bat`
    - You'll see a window showing the agent is running
    - Keep this window open while working
 
-5. **AUTOMATIC STARTUP (Optional)**
-   To run automatically when Windows starts:
-   - Press Win+R, type `shell:startup`, click OK
-   - Copy the `SnapKey-Agent-Starter.bat` file into this folder
+5. **AUTOMATIC STARTUP (Recommended)**
+    For hands-free operation, run the auto-start setup:
+
+    **EASY METHOD (One-click setup):**
+    - Right-click `Setup-AutoStart.bat` and select "Run as administrator"
+    - Follow the on-screen instructions
+    - The agent will now start automatically when Windows boots
+
+    **MANUAL METHOD (If needed):**
+    - Press Win+R, type `shell:startup`, click OK
+    - Create a shortcut to `SnapKey-Agent-Starter.bat` with `--auto` argument
+    - Or use Task Scheduler to run the batch file at system startup
 
 =================================================================
                     REQUIREMENTS
