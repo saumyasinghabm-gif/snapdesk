@@ -5,11 +5,23 @@
 :: Configuration - Fixed backend URL (no editing needed)
 set BACKEND_WS_URL=wss://snapdesk-backend.onrender.com/ws/agent
 if not defined SUPPORT_AGENT_ID set "SUPPORT_AGENT_ID=%COMPUTERNAME%"
+set "AGENT_DIR=%~dp0"
+set "AGENT_EXE=%AGENT_DIR%snapkey-agent.exe"
+
+if not exist "%AGENT_EXE%" (
+    echo ERROR: snapkey-agent.exe was not found next to this starter file.
+    echo Expected location: %AGENT_EXE%
+    echo.
+    echo Please extract the complete SnapKey agent ZIP before running this file.
+    pause
+    exit /b 1
+)
 
 :: Check if we're running in auto-start mode (no console window)
 if "%1"=="--auto" (
     :: Auto-start mode - run silently in background
-    start "" /B .\snapkey-agent.exe
+    start "" /MIN "%AGENT_EXE%"
+    exit /b 0
 ) else (
     :: Manual start mode - show console window
     echo Starting SnapKey Agent...
@@ -22,7 +34,7 @@ if "%1"=="--auto" (
     echo.
 
     :: Run the agent executable
-    .\snapkey-agent.exe
+    "%AGENT_EXE%"
 
     :: Keep window open if agent exits
     echo.

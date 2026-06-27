@@ -10,6 +10,8 @@ Just follow these simple steps:
    You will receive a ZIP file containing:
    - `snapkey-agent.exe` (the main program)
    - `SnapKey-Agent-Starter.bat` (easy startup)
+   - `setup-autostart.bat` (automatic startup setup)
+   - `repair-autostart.bat` (fixes old startup entries)
    - `README-FOR-SUPPORT-TEAM.txt` (this file)
 
 2. **INSTALLATION**
@@ -34,7 +36,7 @@ Just follow these simple steps:
     For hands-free operation, run the auto-start setup:
 
     **EASY METHOD (One-click setup):**
-    - Right-click `Setup-AutoStart.bat` and select "Run as administrator"
+    - Right-click `setup-autostart.bat` and select "Run as administrator"
     - Follow the on-screen instructions
     - The agent will now start automatically when Windows boots
 
@@ -42,6 +44,12 @@ Just follow these simple steps:
     - Press Win+R, type `shell:startup`, click OK
     - Create a shortcut to `SnapKey-Agent-Starter.bat` with `--auto` argument
     - Or use Task Scheduler to run the batch file at system startup
+
+6. **UPDATING AN OLD INSTALLATION**
+    If Windows shows "cannot find .\snapkey-agent.exe" after restart:
+    - Extract this new ZIP over the old folder, or into a new folder
+    - Right-click `repair-autostart.bat` and select "Run as administrator"
+    - Restart the PC and confirm no popup appears
 
 =================================================================
                     REQUIREMENTS

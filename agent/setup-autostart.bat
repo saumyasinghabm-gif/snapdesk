@@ -48,7 +48,7 @@ echo Creating startup shortcut in %STARTUP_DIR%...
     echo Shortcut.TargetPath = "%AGENT_DIR%\SnapKey-Agent-Starter.bat"
     echo Shortcut.Arguments = "--auto"
     echo Shortcut.WorkingDirectory = "%AGENT_DIR%"
-    echo Shortcut.WindowStyle = 7 ' Minimized
+    echo Shortcut.WindowStyle = 7
     echo Shortcut.Description = "SnapKey Remote Access Agent - Auto-start"
     echo Shortcut.Save
 ) > "%TEMP%\create_shortcut.vbs"
@@ -59,6 +59,7 @@ del "%TEMP%\create_shortcut.vbs"
 :: Also create a task scheduler entry for more reliable auto-start
 echo Creating Task Scheduler entry for SnapKey Agent...
 
+schtasks /delete /tn "SnapKey Agent" /f >nul 2>&1
 schtasks /create /tn "SnapKey Agent" /tr "\"%AGENT_DIR%\SnapKey-Agent-Starter.bat\" --auto" /sc onlogon /rl highest /f
 
 if %errorlevel% equ 0 (
