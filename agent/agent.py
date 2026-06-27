@@ -20,12 +20,25 @@ import json
 import time
 import asyncio
 import subprocess
+from typing import Optional
+from urllib.parse import urlencode
 import psutil
 import websockets
 
 # Fixed backend URL - no configuration needed
 BACKEND_WS_URL = "wss://snapdesk-backend.onrender.com/ws/agent"
-# No token required
+
+
+def normalize_agent_id(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in "-_." else "-" for ch in value.strip())
+    return cleaned.strip("-") or "support-agent"
+
+
+SUPPORT_AGENT_ID = normalize_agent_id(
+    os.getenv("SUPPORT_AGENT_ID")
+    or os.getenv("COMPUTERNAME")
+    or f"support-{os.getenv('USERNAME', 'agent')}"
+)
 
 # Well-known Windows installations paths for AnyDesk
 COMMON_PATHS = [
@@ -36,7 +49,7 @@ COMMON_PATHS = [
 ]
 
 
-def find_anydesk_from_processes() -> str | None:
+def find_anydesk_from_processes() -> Optional[str]:
     try:
         for proc in psutil.process_iter(["name", "exe"]):
             try:
@@ -50,7 +63,7 @@ def find_anydesk_from_processes() -> str | None:
     return None
 
 
-def find_anydesk_in_common_paths() -> str | None:
+def find_anydesk_in_common_paths() -> Optional[str]:
     username = os.getenv("USERNAME", "")
     paths = list(COMMON_PATHS)
     if username:
@@ -64,7 +77,7 @@ def find_anydesk_in_common_paths() -> str | None:
     return None
 
 
-def find_anydesk_in_path() -> str | None:
+def find_anydesk_in_path() -> Optional[str]:
     try:
         result = subprocess.run(
             ["where", "AnyDesk.exe"], capture_output=True, text=True, timeout=5
@@ -78,7 +91,7 @@ def find_anydesk_in_path() -> str | None:
     return None
 
 
-def find_anydesk_path() -> str | None:
+def find_anydesk_path() -> Optional[str]:
     """Discovers the AnyDesk executable on the current system."""
     return (
         find_anydesk_from_processes()
@@ -97,7 +110,7 @@ def is_anydesk_running() -> bool:
     return False
 
 
-def run_anydesk_connection(anydesk_path: str, anydesk_id: str, password: str | None):
+def run_anydesk_connection(anydesk_path: str, anydesk_id: str, password: Optional[str]):
     """
     Spawns AnyDesk and passes the target ID and password.
     If AnyDesk is not running, we open the main window first, then run the link.
@@ -132,13 +145,12 @@ def run_anydesk_connection(anydesk_path: str, anydesk_id: str, password: str | N
 
 
 async def listen_for_commands():
-    # WebSocket URL without token (token verification removed)
-    url = BACKEND_WS_URL
+    url = f"{BACKEND_WS_URL}?{urlencode({'agent_id': SUPPORT_AGENT_ID})}"
     print("=========================================================")
     print("         SnapKey Remote Access Agent Starting")
     print("=========================================================")
     print(f"Backend WS Endpoint : {BACKEND_WS_URL}")
-    print("Agent Status        : Connected (no token required)")
+    print(f"Support Agent ID    : {SUPPORT_AGENT_ID}")
     print("=========================================================")
 
     while True:
@@ -194,7 +206,7 @@ if __name__ == "__main__":
 # 1. Press Win + R, type "shell:startup", and click OK. This opens the Startup directory.
 # 2. Right-click in the folder and select New > Shortcut.
 # 3. Enter the command to start your agent, for example:
-#    cmd.exe /k "set AGENT_TOKEN=your-token-here&&set BACKEND_WS_URL=wss://your-backend.onrender.com/ws/agent&&python C:\path\to\agent.py"
+#    cmd.exe /k "set SUPPORT_AGENT_ID=SUPPORT-01&&python C:\path\to\agent.py"
 # 4. Click Next, name your shortcut (e.g. "SnapKey Agent"), and click Finish.
 #
 # METHOD 2: Windows Task Scheduler (Recommended for production/hidden startup)
@@ -211,14 +223,13 @@ if __name__ == "__main__":
 # 8. In "Start in (optional)", enter the folder path:
 #    C:\path\to\
 # 9. Click Finish.
-# 10. (Optional) To configure Environment Variables such as AGENT_TOKEN or BACKEND_WS_URL:
+# 10. (Optional) To configure a custom SUPPORT_AGENT_ID:
 #     - Right-click the newly created task in the list and select Properties.
 #     - Instead of direct execution, you can point the task's program to a batch file (.bat)
 #       that sets the environment variables first, then runs the python script:
 #
 #       @echo off
-#       set BACKEND_WS_URL=wss://your-backend.onrender.com/ws/agent
-#       set AGENT_TOKEN=your-token-here
+#       set SUPPORT_AGENT_ID=SUPPORT-01
 #       python C:\path\to\agent.py
 #
 # =============================================================================

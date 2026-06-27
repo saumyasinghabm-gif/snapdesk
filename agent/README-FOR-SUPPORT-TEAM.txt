@@ -8,7 +8,7 @@ Just follow these simple steps:
 
 1. **DOWNLOAD THE FILES**
    You will receive a ZIP file containing:
-   - `agent.exe` (the main program)
+   - `snapkey-agent.exe` (the main program)
    - `SnapKey-Agent-Starter.bat` (easy startup)
    - `README-FOR-SUPPORT-TEAM.txt` (this file)
 
@@ -20,7 +20,10 @@ Just follow these simple steps:
    ✅ NO CONFIGURATION NEEDED!
    The agent is pre-configured to connect to:
    wss://snapdesk-backend.onrender.com/ws/agent
-   No token required - just install and go!
+   Each support PC must have a unique Support Agent ID.
+   By default, the agent uses the Windows computer name.
+   To set a custom ID, edit `SnapKey-Agent-Starter.bat` and add:
+   set "SUPPORT_AGENT_ID=SUPPORT-01"
 
 4. **RUNNING THE AGENT**
    - Double-click `SnapKey-Agent-Starter.bat`
@@ -58,7 +61,8 @@ Just follow these simple steps:
    - Verify the backend URL in the batch file
 
 🔴 "Invalid agent token"
-   - Contact your team leader for the correct token
+   - Make sure this support PC's agent is running
+   - Make sure the dashboard selected the same Support Agent ID shown in the agent window
 
 🔴 "AnyDesk not found"
    - Install AnyDesk from https://anydesk.com/
@@ -72,7 +76,7 @@ Just follow these simple steps:
 
 For help, contact your IT team with:
 - The error message you see
-- Your agent token (first 4 characters only)
+- The Support Agent ID shown in the agent window
 - Whether AnyDesk is installed
 
 =================================================================

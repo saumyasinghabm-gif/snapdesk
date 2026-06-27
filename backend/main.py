@@ -147,7 +147,16 @@ class ConnectRequest(BaseModel):
         return cleaned
 
 class ConnectRequestPayload(BaseModel):
+    agent_id: str
     user_id: str
+
+    @field_validator("agent_id")
+    @classmethod
+    def validate_agent_id(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("Agent ID is required")
+        return cleaned
 
     @field_validator("user_id")
     @classmethod
@@ -250,14 +259,24 @@ def is_anydesk_running() -> bool:
     return False
 
 # ---------------------------------------------------------------------------
-# WebSocket Agent Connection Management (Token verification removed)
+# WebSocket Agent Connection Management
 # ---------------------------------------------------------------------------
 connected_agents: Dict[str, WebSocket] = {}
 
 @app.websocket("/ws/agent")
-async def websocket_agent(websocket: WebSocket):
-    # Generate a simple connection ID for tracking
-    connection_id = f"agent-{len(connected_agents) + 1}"
+async def websocket_agent(websocket: WebSocket, agent_id: Optional[str] = None):
+    if not agent_id or not agent_id.strip():
+        await websocket.close(code=4003)
+        return
+
+    connection_id = agent_id.strip()
+
+    old_socket = connected_agents.get(connection_id)
+    if old_socket:
+        try:
+            await old_socket.close(code=4000)
+        except Exception:
+            pass
 
     await websocket.accept()
     connected_agents[connection_id] = websocket
@@ -269,10 +288,11 @@ async def websocket_agent(websocket: WebSocket):
     except WebSocketDisconnect:
         print(f"Agent disconnected: {connection_id}")
     finally:
-        connected_agents.pop(connection_id, None)
+        if connected_agents.get(connection_id) is websocket:
+            connected_agents.pop(connection_id, None)
 
 # ---------------------------------------------------------------------------
-# API Routes (Modified to not require agent tokens)
+# API Routes
 # ---------------------------------------------------------------------------
 @app.get("/")
 def read_root():
@@ -285,7 +305,7 @@ def health():
 @app.get("/api/agents")
 def list_agents():
     """Lists currently connected support agents."""
-    return {"connected_agents": list(connected_agents.keys())}
+    return {"connected_agents": sorted(connected_agents.keys())}
 
 @app.post("/api/connect-request")
 async def connect_request(payload: ConnectRequestPayload):
@@ -293,17 +313,22 @@ async def connect_request(payload: ConnectRequestPayload):
     Looks up the saved user's encrypted password, decrypts it, and
     sends a JSON connection command over the selected agent's WebSocket.
     """
+    agent_id = payload.agent_id
     user_id = payload.user_id
 
-    # Use the first connected agent (since we don't have tokens anymore)
     if not connected_agents:
         raise HTTPException(
             status_code=503,
             detail="No agents are currently connected."
         )
 
-    # Get the first available agent
-    agent_connection_id = next(iter(connected_agents))
+    if agent_id not in connected_agents:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Support agent '{agent_id}' is not currently connected."
+        )
+
+    agent_connection_id = agent_id
     ws = connected_agents[agent_connection_id]
 
     try:
@@ -329,13 +354,15 @@ async def connect_request(payload: ConnectRequestPayload):
     try:
         await asyncio.wait_for(ws.send_json(command), timeout=10)
     except asyncio.TimeoutError:
-        connected_agents.pop(agent_connection_id, None)
+        if connected_agents.get(agent_connection_id) is ws:
+            connected_agents.pop(agent_connection_id, None)
         raise HTTPException(
             status_code=503,
             detail="Connected agent did not respond in time. Please restart the support agent."
         )
     except Exception as e:
-        connected_agents.pop(agent_connection_id, None)
+        if connected_agents.get(agent_connection_id) is ws:
+            connected_agents.pop(agent_connection_id, None)
         raise HTTPException(
             status_code=503,
             detail=f"Failed to transmit connection command to agent: {e}"
@@ -343,7 +370,7 @@ async def connect_request(payload: ConnectRequestPayload):
 
     return {
         "status": "initiated",
-        "message": f"Connection request sent to agent for AnyDesk ID '{user_id}'."
+        "message": f"Connection request sent to support agent '{agent_id}' for AnyDesk ID '{user_id}'."
     }
 
 @app.post("/api/connect", response_model=ConnectResponse)

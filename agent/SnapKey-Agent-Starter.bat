@@ -4,7 +4,7 @@
 
 :: Configuration - Fixed backend URL (no editing needed)
 set BACKEND_WS_URL=wss://snapdesk-backend.onrender.com/ws/agent
-:: No token required - removed AGENT_TOKEN
+if not defined SUPPORT_AGENT_ID set "SUPPORT_AGENT_ID=%COMPUTERNAME%"
 
 :: Check if we're running in auto-start mode (no console window)
 if "%1"=="--auto" (
@@ -14,7 +14,7 @@ if "%1"=="--auto" (
     :: Manual start mode - show console window
     echo Starting SnapKey Agent...
     echo Backend: %BACKEND_WS_URL%
-    echo Token: %AGENT_TOKEN%
+    echo Support Agent ID: %SUPPORT_AGENT_ID%
     echo.
     echo =========================================================
     echo          SnapKey Remote Access Agent

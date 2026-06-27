@@ -132,13 +132,18 @@ function renderAgentsList(agents) {
   }
 
   agentsListContainer.innerHTML = "";
-  agents.forEach(token => {
+    agents.forEach(agentId => {
     const div = document.createElement("div");
     div.className = "agent-item";
     div.innerHTML = `
       <span class="status-dot"></span>
-      <span class="token">${escapeHTML(token)}</span>
+      <span class="token">${escapeHTML(agentId)}</span>
     `;
+    div.addEventListener("click", () => {
+      agentTokenInput.value = agentId;
+      localStorage.setItem("snapkey_last_agent_id", agentId);
+      setStatus(`Selected support agent "${agentId}".`, "success");
+    });
     agentsListContainer.appendChild(div);
   });
 }
@@ -183,7 +188,6 @@ saveBtn.addEventListener("click", async () => {
   const userName = userNameInput.value.trim();
   const userId = userIdInput.value.trim().replace(/\s/g, "");
   const password = passwordInput.value;
-  const agentToken = agentTokenInput.value.trim();
 
   if (!userName || !userId) {
     setStatus("Please enter both User Name and User ID to save.", "error");
@@ -193,11 +197,6 @@ saveBtn.addEventListener("click", async () => {
   if (!/^\d+$/.test(userId)) {
     setStatus("User ID (AnyDesk ID) must contain only numbers.", "error");
     return;
-  }
-
-  // Persist the agent token locally for convenience
-  if (agentToken) {
-    localStorage.setItem("snapkey_last_agent_token", agentToken);
   }
 
   saveBtn.disabled = true;
@@ -237,10 +236,10 @@ saveBtn.addEventListener("click", async () => {
 // Connect Action (Agent-based connect-request)
 connectBtn.addEventListener("click", async () => {
   const userId = userIdInput.value.trim().replace(/\s/g, "");
-  const agentToken = agentTokenInput.value.trim();
+  const agentId = agentTokenInput.value.trim();
 
-  if (!userId || !agentToken) {
-    setStatus("Connect requires both AnyDesk User ID and Agent Token.", "error");
+  if (!userId || !agentId) {
+    setStatus("Connect requires both AnyDesk User ID and Support Agent ID.", "error");
     return;
   }
 
@@ -249,18 +248,17 @@ connectBtn.addEventListener("click", async () => {
     return;
   }
 
-  // Persist agent token locally
-  localStorage.setItem("snapkey_last_agent_token", agentToken);
+  localStorage.setItem("snapkey_last_agent_id", agentId);
 
   connectBtn.disabled = true;
-  setStatus(`Sending dispatch request to agent "${agentToken}"...`, "pending");
+  setStatus(`Sending dispatch request to support agent "${agentId}"...`, "pending");
 
   try {
     const res = await fetch(buildApiUrl("/api/connect-request"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        agent_token: agentToken,
+        agent_id: agentId,
         user_id: userId
       })
     });
@@ -282,13 +280,11 @@ connectBtn.addEventListener("click", async () => {
   }
 });
 
-// Load persistent agent token and fetch data on launch
+// Load persistent agent selection and fetch data on launch
 window.addEventListener("DOMContentLoaded", () => {
-  const cachedToken = localStorage.getItem("snapkey_last_agent_token");
-  if (cachedToken) {
-    agentTokenInput.value = cachedToken;
-  } else {
-    agentTokenInput.value = "dev-agent-token";
+  const cachedAgentId = localStorage.getItem("snapkey_last_agent_id");
+  if (cachedAgentId) {
+    agentTokenInput.value = cachedAgentId;
   }
 
   // Initial loads
