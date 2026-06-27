@@ -19,6 +19,7 @@ enabled unattended access themselves in their own AnyDesk settings.
 import os
 import subprocess
 import base64
+import asyncio
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
@@ -35,8 +36,8 @@ from sqlalchemy import (
     inspect,
     text,
 )
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from cryptography.fernet import Fernet
 
 # ---------------------------------------------------------------------------
@@ -112,13 +113,6 @@ def ensure_database_schema() -> None:
 
 
 ensure_database_schema()
-
-def get_db_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -312,8 +306,12 @@ async def connect_request(payload: ConnectRequestPayload):
     agent_connection_id = next(iter(connected_agents))
     ws = connected_agents[agent_connection_id]
 
-    db: Session = next(get_db_session())
-    db_user = db.query(User).filter(User.user_id == user_id).first()
+    try:
+        with SessionLocal() as db:
+            db_user = db.query(User).filter(User.user_id == user_id).first()
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=503, detail=f"Database error while loading saved user: {e}")
+
     if not db_user:
         raise HTTPException(
             status_code=404,
@@ -329,7 +327,13 @@ async def connect_request(payload: ConnectRequestPayload):
     }
 
     try:
-        await ws.send_json(command)
+        await asyncio.wait_for(ws.send_json(command), timeout=10)
+    except asyncio.TimeoutError:
+        connected_agents.pop(agent_connection_id, None)
+        raise HTTPException(
+            status_code=503,
+            detail="Connected agent did not respond in time. Please restart the support agent."
+        )
     except Exception as e:
         connected_agents.pop(agent_connection_id, None)
         raise HTTPException(
@@ -384,47 +388,55 @@ def connect_legacy(req: ConnectRequest):
 @app.post("/api/users", response_model=UserOut)
 def create_user(user: UserCreate):
     """Saves a user and encrypts their password using symmetric Fernet encryption."""
-    db: Session = next(get_db_session())
+    with SessionLocal() as db:
+        existing_user = db.query(User).filter(User.user_id == user.user_id).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A user with User ID '{user.user_id}' already exists."
+            )
 
-    existing_user = db.query(User).filter(User.user_id == user.user_id).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=409,
-            detail=f"A user with User ID '{user.user_id}' already exists."
+        encrypted = encrypt_password(user.password) if user.password else None
+
+        db_user = User(
+            user_name=user.user_name,
+            user_id=user.user_id,
+            encrypted_password=encrypted,
         )
 
-    encrypted = encrypt_password(user.password) if user.password else None
+        db.add(db_user)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=f"A user with User ID '{user.user_id}' already exists.",
+            )
+        except SQLAlchemyError as e:
+            db.rollback()
+            raise HTTPException(status_code=503, detail=f"Database error while saving user: {e}")
 
-    db_user = User(
-        user_name=user.user_name,
-        user_id=user.user_id,
-        encrypted_password=encrypted,
-    )
-
-    db.add(db_user)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail=f"A user with User ID '{user.user_id}' already exists.",
-        )
-
-    db.refresh(db_user)
-    return db_user
+        db.refresh(db_user)
+        return db_user
 
 @app.get("/api/users", response_model=list[UserOut])
 def get_all_users():
     """Lists all saved remote users."""
-    db: Session = next(get_db_session())
-    return db.query(User).order_by(User.id.desc()).all()
+    try:
+        with SessionLocal() as db:
+            return db.query(User).order_by(User.id.desc()).all()
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=503, detail=f"Database error while loading users: {e}")
 
 @app.get("/api/users/{user_id}", response_model=UserOut)
 def get_single_user(user_id: str):
     """Retrieves a single user by AnyDesk ID."""
-    db: Session = next(get_db_session())
-    db_user = db.query(User).filter(User.user_id == user_id).first()
+    try:
+        with SessionLocal() as db:
+            db_user = db.query(User).filter(User.user_id == user_id).first()
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=503, detail=f"Database error while loading user: {e}")
 
     if not db_user:
         raise HTTPException(status_code=404, detail=f"No user found with ID '{user_id}'.")
