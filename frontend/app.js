@@ -4,9 +4,9 @@
  * In local dev, this points to http://127.0.0.1:8000.
  * In production, this points at the Render backend defined in render.yaml.
  */
-const API_BASE = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
-  ? "http://127.0.0.1:8000"
-  : "https://snapkey-backend.onrender.com";
+ const API_BASE = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
+   ? "http://127.0.0.1:8000"
+   : "https://snapdesk-backend.onrender.com";
 
 // Fix double slash issue by ensuring proper URL construction
 function buildApiUrl(path) {

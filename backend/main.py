@@ -20,7 +20,7 @@ import os
 import subprocess
 import base64
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Dict, Optional
 
 import psutil
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -32,6 +32,8 @@ from sqlalchemy import (
     Integer,
     String,
     create_engine,
+    inspect,
+    text,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -57,7 +59,7 @@ def encrypt_password(password: str) -> str:
         return None
     return fernet.encrypt(password.encode()).decode()
 
-def decrypt_password(encrypted: str) -> str | None:
+def decrypt_password(encrypted: str) -> Optional[str]:
     if not encrypted:
         return None
     try:
@@ -93,8 +95,23 @@ class User(Base):
     encrypted_password = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-# Create tables if SQLite, or assume they are managed
+# Create tables and apply small additive migrations for existing databases.
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_database_schema() -> None:
+    inspector = inspect(engine)
+    if not inspector.has_table("users"):
+        Base.metadata.create_all(bind=engine)
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    if "encrypted_password" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN encrypted_password VARCHAR"))
+
+
+ensure_database_schema()
 
 def get_db_session():
     db = SessionLocal()
@@ -136,7 +153,7 @@ class ConnectRequest(BaseModel):
         return cleaned
 
 class ConnectRequestPayload(BaseModel):
-    user_id: str  # Removed agent_token field
+    user_id: str
 
     @field_validator("user_id")
     @classmethod
@@ -149,12 +166,12 @@ class ConnectRequestPayload(BaseModel):
 class ConnectResponse(BaseModel):
     status: str
     message: str
-    anydesk_path: str | None = None
+    anydesk_path: Optional[str] = None
 
 class UserCreate(BaseModel):
     user_name: str
     user_id: str
-    password: str | None = None
+    password: Optional[str] = None
 
     @field_validator("user_id")
     @classmethod
@@ -183,7 +200,7 @@ COMMON_PATHS = [
     r"C:\ProgramData\AnyDesk\AnyDesk.exe",
 ]
 
-def find_anydesk_from_processes() -> str | None:
+def find_anydesk_from_processes() -> Optional[str]:
     try:
         for proc in psutil.process_iter(["name", "exe"]):
             try:
@@ -196,7 +213,7 @@ def find_anydesk_from_processes() -> str | None:
         pass
     return None
 
-def find_anydesk_in_common_paths() -> str | None:
+def find_anydesk_in_common_paths() -> Optional[str]:
     username = os.getenv("USERNAME", "")
     paths = list(COMMON_PATHS)
     if username:
@@ -209,7 +226,7 @@ def find_anydesk_in_common_paths() -> str | None:
             return p
     return None
 
-def find_anydesk_in_path() -> str | None:
+def find_anydesk_in_path() -> Optional[str]:
     try:
         result = subprocess.run(
             ["where", "AnyDesk.exe"], capture_output=True, text=True, timeout=5
@@ -222,7 +239,7 @@ def find_anydesk_in_path() -> str | None:
         pass
     return None
 
-def find_anydesk_path() -> str | None:
+def find_anydesk_path() -> Optional[str]:
     return (
         find_anydesk_from_processes()
         or find_anydesk_in_common_paths()
