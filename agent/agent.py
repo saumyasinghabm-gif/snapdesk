@@ -22,8 +22,14 @@ import asyncio
 import subprocess
 from typing import Optional
 from urllib.parse import urlencode
+from pathlib import Path
 import psutil
 import websockets
+
+try:
+    import winreg
+except ImportError:
+    winreg = None
 
 # Fixed backend URL - no configuration needed
 BACKEND_WS_URL = "wss://snapdesk-backend.onrender.com/ws/agent"
@@ -49,13 +55,27 @@ COMMON_PATHS = [
 ]
 
 
+def valid_anydesk_path(path: Optional[str]) -> Optional[str]:
+    if not path:
+        return None
+
+    cleaned = path.strip().strip('"')
+    if "," in cleaned:
+        cleaned = cleaned.split(",", 1)[0]
+
+    if os.path.isfile(cleaned) and os.path.basename(cleaned).lower() == "anydesk.exe":
+        return os.path.abspath(cleaned)
+    return None
+
+
 def find_anydesk_from_processes() -> Optional[str]:
     try:
         for proc in psutil.process_iter(["name", "exe"]):
             try:
                 if proc.info["name"] and "anydesk" in proc.info["name"].lower():
-                    if proc.info["exe"] and os.path.exists(proc.info["exe"]):
-                        return proc.info["exe"]
+                    path = valid_anydesk_path(proc.info["exe"])
+                    if path:
+                        return path
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
     except Exception:
@@ -72,8 +92,68 @@ def find_anydesk_in_common_paths() -> Optional[str]:
             rf"C:\Users\{username}\AppData\Roaming\AnyDesk\AnyDesk.exe",
         ])
     for p in paths:
-        if os.path.exists(p):
-            return p
+        path = valid_anydesk_path(p)
+        if path:
+            return path
+    return None
+
+
+def find_anydesk_in_registry() -> Optional[str]:
+    if winreg is None:
+        return None
+
+    registry_paths = [
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AnyDesk.exe"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\AnyDesk.exe"),
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AnyDesk.exe"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\AnyDesk"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\AnyDesk"),
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\AnyDesk"),
+    ]
+
+    value_names = ["", "Path", "InstallLocation", "DisplayIcon", "InstallSource"]
+
+    for root, key_path in registry_paths:
+        try:
+            with winreg.OpenKey(root, key_path) as key:
+                for value_name in value_names:
+                    try:
+                        value, _ = winreg.QueryValueEx(key, value_name)
+                    except OSError:
+                        continue
+
+                    candidates = [str(value)]
+                    if value_name in {"InstallLocation", "InstallSource", "Path"}:
+                        candidates.append(os.path.join(str(value), "AnyDesk.exe"))
+
+                    for candidate in candidates:
+                        path = valid_anydesk_path(candidate)
+                        if path:
+                            return path
+        except OSError:
+            continue
+
+    return None
+
+
+def find_anydesk_by_search() -> Optional[str]:
+    roots = [
+        os.getenv("ProgramFiles"),
+        os.getenv("ProgramFiles(x86)"),
+        os.getenv("ProgramData"),
+        os.path.join(os.getenv("LOCALAPPDATA", ""), "Programs"),
+        os.getenv("LOCALAPPDATA"),
+        os.getenv("APPDATA"),
+    ]
+
+    for root in [r for r in roots if r and os.path.isdir(r)]:
+        try:
+            for path in Path(root).glob("**/AnyDesk.exe"):
+                resolved = valid_anydesk_path(str(path))
+                if resolved:
+                    return resolved
+        except Exception:
+            continue
     return None
 
 
@@ -83,9 +163,10 @@ def find_anydesk_in_path() -> Optional[str]:
             ["where", "AnyDesk.exe"], capture_output=True, text=True, timeout=5
         )
         if result.returncode == 0:
-            path = result.stdout.strip().split("\n")[0]
-            if path and os.path.exists(path):
-                return path
+            for line in result.stdout.strip().splitlines():
+                path = valid_anydesk_path(line)
+                if path:
+                    return path
     except Exception:
         pass
     return None
@@ -95,8 +176,10 @@ def find_anydesk_path() -> Optional[str]:
     """Discovers the AnyDesk executable on the current system."""
     return (
         find_anydesk_from_processes()
+        or find_anydesk_in_registry()
         or find_anydesk_in_common_paths()
         or find_anydesk_in_path()
+        or find_anydesk_by_search()
     )
 
 
@@ -119,10 +202,12 @@ def run_anydesk_connection(anydesk_path: str, anydesk_id: str, password: Optiona
         # Check if AnyDesk is running, start if not
         if not is_anydesk_running():
             print("AnyDesk is not currently running. Starting the main process...")
+            print(f"Using AnyDesk executable: {anydesk_path}")
             subprocess.Popen([anydesk_path])
             time.sleep(2)  # small buffer for the system socket to bind
 
         print(f"Connecting to AnyDesk ID: {anydesk_id}")
+        print(f"Using AnyDesk executable: {anydesk_path}")
 
         if password:
             print("Using pre-configured password for automated connection...")
