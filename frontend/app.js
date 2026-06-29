@@ -23,7 +23,6 @@ function buildApiUrl(path) {
 // Cache elements
 const userNameInput = document.getElementById("user_name");
 const userIdInput = document.getElementById("user_id");
-const agentTokenInput = document.getElementById("agent_token");
 const passwordInput = document.getElementById("password");
 
 const saveBtn = document.getElementById("save-btn");
@@ -38,6 +37,17 @@ const agentsListContainer = document.getElementById("agents-list");
 
 // Keep local memory of users for search filtering
 let savedUsers = [];
+let activeAgents = [];
+let selectedAgentId = "";
+
+function selectSupportAgent(agentId, announce = true) {
+  selectedAgentId = agentId;
+  localStorage.setItem("snapkey_last_agent_id", agentId);
+  renderAgentsList(activeAgents);
+  if (announce) {
+    setStatus(`Selected support agent "${agentId}".`, "success");
+  }
+}
 
 /**
  * Updates the Connection Status card with a message and a severity class.
@@ -81,8 +91,18 @@ async function loadActiveAgents() {
     const res = await fetch(buildApiUrl("/api/agents"));
     if (!res.ok) throw new Error("Backend response error");
     const data = await res.json();
-    const agents = data.connected_agents || [];
-    renderAgentsList(agents);
+    activeAgents = data.connected_agents || [];
+
+    const cachedAgentId = localStorage.getItem("snapkey_last_agent_id");
+    if (!selectedAgentId && cachedAgentId && activeAgents.includes(cachedAgentId)) {
+      selectedAgentId = cachedAgentId;
+    }
+
+    if (!selectedAgentId && activeAgents.length === 1) {
+      selectSupportAgent(activeAgents[0], false);
+    } else {
+      renderAgentsList(activeAgents);
+    }
   } catch (err) {
     console.error("Failed to load connected agents:", err);
     // Only show error if we haven't successfully loaded agents before
@@ -132,17 +152,15 @@ function renderAgentsList(agents) {
   }
 
   agentsListContainer.innerHTML = "";
-    agents.forEach(agentId => {
+  agents.forEach(agentId => {
     const div = document.createElement("div");
-    div.className = "agent-item";
+    div.className = agentId === selectedAgentId ? "agent-item selected" : "agent-item";
     div.innerHTML = `
       <span class="status-dot"></span>
       <span class="token">${escapeHTML(agentId)}</span>
     `;
     div.addEventListener("click", () => {
-      agentTokenInput.value = agentId;
-      localStorage.setItem("snapkey_last_agent_id", agentId);
-      setStatus(`Selected support agent "${agentId}".`, "success");
+      selectSupportAgent(agentId);
     });
     agentsListContainer.appendChild(div);
   });
@@ -236,10 +254,10 @@ saveBtn.addEventListener("click", async () => {
 // Connect Action (Agent-based connect-request)
 connectBtn.addEventListener("click", async () => {
   const userId = userIdInput.value.trim().replace(/\s/g, "");
-  const agentId = agentTokenInput.value.trim();
+  const agentId = selectedAgentId;
 
   if (!userId || !agentId) {
-    setStatus("Connect requires both AnyDesk User ID and Support Agent ID.", "error");
+    setStatus("Select an online support agent once, then choose a saved device or enter an AnyDesk ID.", "error");
     return;
   }
 
@@ -247,8 +265,6 @@ connectBtn.addEventListener("click", async () => {
     setStatus("User ID (AnyDesk ID) must contain only numbers.", "error");
     return;
   }
-
-  localStorage.setItem("snapkey_last_agent_id", agentId);
 
   connectBtn.disabled = true;
   setStatus(`Sending dispatch request to support agent "${agentId}"...`, "pending");
@@ -282,9 +298,12 @@ connectBtn.addEventListener("click", async () => {
 
 // Load persistent agent selection and fetch data on launch
 window.addEventListener("DOMContentLoaded", () => {
-  const cachedAgentId = localStorage.getItem("snapkey_last_agent_id");
-  if (cachedAgentId) {
-    agentTokenInput.value = cachedAgentId;
+  const urlAgentId = new URLSearchParams(window.location.search).get("agent_id");
+  if (urlAgentId) {
+    selectedAgentId = urlAgentId.trim();
+    localStorage.setItem("snapkey_last_agent_id", selectedAgentId);
+  } else {
+    selectedAgentId = localStorage.getItem("snapkey_last_agent_id") || "";
   }
 
   // Initial loads

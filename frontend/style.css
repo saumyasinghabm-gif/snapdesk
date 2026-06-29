@@ -160,11 +160,17 @@ body {
 }
 
 .agent-item {
-  cursor: default;
+  cursor: pointer;
   background: rgba(255, 255, 255, 0.3);
   flex-direction: row;
   align-items: center;
   gap: 8px;
+}
+
+.agent-item.selected {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(0, 0, 0, 0.22);
+  box-shadow: inset 3px 0 0 #111;
 }
 
 .agent-item .status-dot {
